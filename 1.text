@@ -1,0 +1,62 @@
+# Nagashybek Ramazan, 14-02-2020
+
+#Load needed libraries. If you will use portuguese phrases, some steps isn't necessary cause won't work to this lang.
+library("NLP")
+library("tm")
+library("SnowballC")
+library("RColorBrewer")
+library("wordcloud")
+library(htm2txt)
+
+
+url <- 'https://www.eurosport.ru'
+text <- gettxt(url)
+text <- xpathApply(text, "//body//text()[not(ancestor::script)][not(ancestor::style)][not(ancestor::noscript)]", xmlValue)
+   #cat(unlist(text))
+#Load data as a corpus.
+#Corpus is a list of documents, in this case is only one document.
+docs <- Corpus(VectorSource(text))
+#cat(unlist(docs))
+#I don't exaclty whats this command do.
+#Inspect the content of the doc.
+
+
+#Replace symbols, removing unnecessary.
+toSpace <- content_transformer(function(x, pattern) gsub(pattern, " ", x))
+docs <- tm_map(docs, toSpace, "/")
+docs <- tm_map(docs, toSpace, "@")
+docs <- tm_map(docs, toSpace, "\\|")
+
+# Convert the text to lower case.
+docs <- tm_map(docs, content_transformer(tolower))
+
+# Remove numbers.
+docs <- tm_map(docs, removeNumbers)
+
+# Remove english common stopwords.
+
+# specify your stopwords as a character vector - I didn't use here.
+
+# Remove punctuations.
+docs <- tm_map(docs, removePunctuation)
+
+#Delete extra spaces.
+docs <- tm_map(docs, stripWhitespace)
+
+#Stemming
+docs <- tm_map(docs, stemDocument)
+#cat(unlist(docs))
+
+#----------------------- Start from here it's capture the frequency of words in doc.
+
+#Matrix is a table containing all the frequencies of the words.
+dtm <- TermDocumentMatrix(docs)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m), decreasing = TRUE)
+d <- data.frame(word = names(v), freq = v)
+
+#How much words will have in cloud.
+count_words <- 10
+
+head(d, count_words)
+
