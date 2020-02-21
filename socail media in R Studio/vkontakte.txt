@@ -27,37 +27,35 @@ access_token <-get_access_token()
 two_last_posts <- fromJSON(getURL('https://api.vk.com/method/wall.get?domain=runningvrn&count=2'))$response
 id_max <- max(two_last_posts[[2]]$id, two_last_posts[[3]]$id)
 
-# пауза при между последовательными запросами
 sleep_time <- .34
-# сохраняем записи c id_min по id_max в датафрейм
+
 get_wall_posts <- function(id_min, id_max, id_step=100){
-    # устанавливаем основные параметры вызова
+   
     extended <- paste0('extended=', 0)
     copy_depth <- paste0('copy_history_depth=', 1)
-    # загружаем посты пачками
+    
     id_lo=id_min;id_hi=id_min+id_step-1
-    cat(id_min,'-',id_max,': ') # вывод текущей позиции, чтобы не грустить
+    cat(id_min,'-',id_max,': ') 
     while (id_lo < id_max) {
-        cat(min(id_hi, id_max), '. ')# вывод текущей позиции, чтобы не грустить
-        posts_range <- id_lo:id_hi # диапазон в текущей пачке
+        cat(min(id_hi, id_max), '. ')
+        posts_range <- id_lo:id_hi 
         posts <- paste0('posts=', paste0('-', group_id, '_', posts_range, 
                                         collapse=','))
-        # используем версию 4.9
-        # можно без access_token (изменится поле whodidthis)
+        
         # request <- paste('https://api.vk.com/method/wall.getById?v=4.9',
         #                  posts, extended, copy_depth, sep='&')
         request <- paste('https://api.vk.com/method/wall.getById?v=4.9',
                          posts, extended, copy_depth, access_token, sep='&')
         posts_list <- fromJSON(getURL(request))
-        # если пачка первая, то создаем датафрейм
+        
         if (id_lo == id_min) 
             df <- wall2df(posts_list$response)
-        # а если нет, то дополняем следующей пачкой
+        
         else 
             df <- rbind(df, wall2df(posts_list$response))
-        # пауза, чтобы запросы не были слишком частыми
+        
         if (id_hi < id_max) Sys.sleep(sleep_time)
-        # индексы для новой пачки
+      
         id_lo <- id_lo+id_step
         id_hi <- id_hi+id_step
     }
@@ -79,7 +77,7 @@ wall2df <- function(wall){
                                    ifelse(is.null(wall_post$signer_id),
                                           NA, wall_post$signer_id),
                                    wall_post$created_by) 
-        df$type[i] <- wall_post$post_type # пост/репост
+        df$type[i] <- wall_post$post_type # ГЇГ®Г±ГІ/Г°ГҐГЇГ®Г±ГІ
         df$comments[i] <- wall_post$comments[["count"]] 
         df$likes[i] <- wall_post$likes[["count"]] 
         df$reposts[i] <- wall_post$reposts[["count"]] 
