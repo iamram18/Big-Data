@@ -1,0 +1,27 @@
+#load library
+library(twitteR)
+#load credentials
+consumer_key <- “****************”
+consumer_secret<- “*******************”
+access_token <- “*******************”
+access_secret <- “************************”
+
+setup_twitter_oauth(consumer_key ,consumer_secret,access_token ,access_secret)
+
+tweets <- twitteR::searchTwitter(“#rstats”,n =12,lang =”en”,since = ‘2020–01–01’)
+#strip retweets
+strip_retweets(tweets)
+
+#convert to data frame using the twListtoDF function
+df <- twListToDF(tweets)\#extract the data frame save it locally
+saveRDS(df, file=”tweets.rds”)
+df1 <- readRDS(“mytweets.rds”)
+
+
+library(dplyr)
+#clean up any duplicate tweets from the data frame using #dplyr::distinct
+dplyr::distinct(df1)
+
+winner <-df1 %>% select(text,retweetCount,screenName,id )%>% filter(retweetCount == max(retweetCount))
+View(winner)
+

@@ -1,0 +1,98 @@
+library(RCurl)
+library(httr)
+library(RJSONIO)
+library(lubridate)
+library(dplyr)
+
+get_access_token <- function(){
+    accessURL <- "https://oauth.vk.com/access_token"
+    authURL <- "https://oauth.vk.com/authorize"
+    vk <- oauth_endpoint(authorize = authURL,
+                         access = accessURL)
+    myapp <- oauth_app(app_name, client_id, client_secret)
+    ig_oauth <- oauth2.0_token(vk, myapp,  
+                               type = "application/x-www-form-urlencoded",
+                               cache=FALSE)
+    my_session <-  strsplit(toString(names(ig_oauth$credentials)), '"')
+    access_token <- paste0('access_token=', my_session[[1]][4])
+    
+    access_token
+}
+
+
+source('secret_keys.R')
+
+access_token <-get_access_token()
+
+two_last_posts <- fromJSON(getURL('https://api.vk.com/method/wall.get?domain=runningvrn&count=2'))$response
+id_max <- max(two_last_posts[[2]]$id, two_last_posts[[3]]$id)
+
+# пауза при между последовательными запросами
+sleep_time <- .34
+# сохраняем записи c id_min по id_max в датафрейм
+get_wall_posts <- function(id_min, id_max, id_step=100){
+    # устанавливаем основные параметры вызова
+    extended <- paste0('extended=', 0)
+    copy_depth <- paste0('copy_history_depth=', 1)
+    # загружаем посты пачками
+    id_lo=id_min;id_hi=id_min+id_step-1
+    cat(id_min,'-',id_max,': ') # вывод текущей позиции, чтобы не грустить
+    while (id_lo < id_max) {
+        cat(min(id_hi, id_max), '. ')# вывод текущей позиции, чтобы не грустить
+        posts_range <- id_lo:id_hi # диапазон в текущей пачке
+        posts <- paste0('posts=', paste0('-', group_id, '_', posts_range, 
+                                        collapse=','))
+        # используем версию 4.9
+        # можно без access_token (изменится поле whodidthis)
+        # request <- paste('https://api.vk.com/method/wall.getById?v=4.9',
+        #                  posts, extended, copy_depth, sep='&')
+        request <- paste('https://api.vk.com/method/wall.getById?v=4.9',
+                         posts, extended, copy_depth, access_token, sep='&')
+        posts_list <- fromJSON(getURL(request))
+        # если пачка первая, то создаем датафрейм
+        if (id_lo == id_min) 
+            df <- wall2df(posts_list$response)
+        # а если нет, то дополняем следующей пачкой
+        else 
+            df <- rbind(df, wall2df(posts_list$response))
+        # пауза, чтобы запросы не были слишком частыми
+        if (id_hi < id_max) Sys.sleep(sleep_time)
+        # индексы для новой пачки
+        id_lo <- id_lo+id_step
+        id_hi <- id_hi+id_step
+    }
+    
+    df
+}
+
+
+wall2df <- function(wall){
+    
+    df <- data.frame(uid=rep(0, length(wall)))
+    i <- 0
+
+    for (wall_post in wall){
+        i <- i + 1
+        df$uid[i] <- wall_post$id # id of post
+        df$author[i] <- wall_post$from_id # author of post
+        df$whodidthis[i] <- ifelse(is.null(wall_post$created_by),
+                                   ifelse(is.null(wall_post$signer_id),
+                                          NA, wall_post$signer_id),
+                                   wall_post$created_by) 
+        df$type[i] <- wall_post$post_type # пост/репост
+        df$comments[i] <- wall_post$comments[["count"]] 
+        df$likes[i] <- wall_post$likes[["count"]] 
+        df$reposts[i] <- wall_post$reposts[["count"]] 
+        df$date[i] <- wall_post$date 
+        df$text[i] <- wall_post$text 
+    }
+
+    df$date <- as.POSIXct(df$date, origin="1970-01-01", 
+                          tz='Europe/Moscow')
+    
+    df
+}
+
+group_id <- 89497660 
+id_min <- 1
+posts <- get_wall_posts(id_min, id_max)
